@@ -3,6 +3,8 @@ import sys
 import json
 from time import sleep
 from random import choice, random, uniform
+from threading import Thread
+import time
 
 file = open("info.txt")
 text = file.read().splitlines()
@@ -65,7 +67,7 @@ def send_message(conn, channel_id, message_data):
         resp_text = resp.read().decode('utf-8')
 
         if 199 < resp.status < 300:
-            print("✓ Message sent!")
+            print(f"✓ Message sent to channel {channel_id}!")
             try:
                 resp_json = json.loads(resp_text)
                 return resp_json.get('id')  # Return message ID for deletion
@@ -95,7 +97,7 @@ def delete_message(conn, channel_id, message_id):
         resp.read()
 
         if 199 < resp.status < 300:
-            print("✓ Previous message deleted (anti-detect mode)")
+            print(f"✓ Previous message deleted (anti-detect) in channel {channel_id}")
             return True
         else:
             sys.stderr.write(f"✗ Failed to delete message: HTTP {resp.status}\n")
@@ -106,12 +108,11 @@ def delete_message(conn, channel_id, message_id):
         return False
 
 
-def run_task(channel_url, channel_id, num_messages, anti_detect):
-    """Run a single task (send messages to one channel)"""
-    print(f"\n{'='*60}")
-    print(f"Task started for channel: {channel_url}")
-    print(f"Anti-detect mode: {'ON' if anti_detect else 'OFF'}")
-    print(f"{'='*60}\n")
+def run_task(task_id, channel_url, channel_id, num_messages, anti_detect):
+    """Run a single task (send messages to one channel) - runs in its own thread"""
+    print(f"\n[TASK {task_id}] Started for channel: {channel_url}")
+    print(f"[TASK {task_id}] Anti-detect mode: {'ON' if anti_detect else 'OFF'}")
+    print(f"[TASK {task_id}] Will send {num_messages} messages\n")
 
     sent_messages = set()
     last_message_id = None
@@ -152,17 +153,17 @@ def run_task(channel_url, channel_id, num_messages, anti_detect):
         remaining_messages = num_messages - i - 1
         remaining_time = remaining_messages * delay / 60  # Convert to minutes
         
-        print(f"Message {i + 1}/{num_messages}: '{random_message}'")
-        print(f"Next message in {delay:.1f}s ({delay/60:.2f}m)")
+        print(f"[TASK {task_id}] Message {i + 1}/{num_messages}: '{random_message}'")
+        print(f"[TASK {task_id}] Next message in {delay:.1f}s ({delay/60:.2f}m)")
         if remaining_messages > 0:
-            print(f"Estimated time to complete: {remaining_time:.1f} minutes\n")
+            print(f"[TASK {task_id}] Estimated time to complete: {remaining_time:.1f} minutes\n")
         
         conn.close()
         
         if remaining_messages > 0:
             sleep(delay)
 
-    print(f"\n✓ Task complete! {num_messages} messages sent to {channel_url}\n")
+    print(f"\n[TASK {task_id}] ✓ Task complete! {num_messages} messages sent to {channel_url}\n")
 
 
 def main():
@@ -200,30 +201,37 @@ def main():
         channel_id = input("Discord channel ID: ").strip()
         
         tasks.append({
+            "task_id": task_num + 1,
             "channel_url": channel_url,
             "channel_id": channel_id,
             "num_messages": num_messages,
             "anti_detect": anti_detect,
         })
     
-    # Run all tasks
+    # Run all tasks concurrently
     print("\n" + "="*60)
-    print(f"Starting {num_tasks} task(s)...")
+    print(f"Starting {num_tasks} task(s) concurrently...")
     print("="*60)
     
-    for idx, task in enumerate(tasks, 1):
-        print(f"\n[Task {idx}/{num_tasks}]")
-        run_task(
-            task["channel_url"],
-            task["channel_id"],
-            task["num_messages"],
-            task["anti_detect"]
+    threads = []
+    for task in tasks:
+        # Create and start a thread for each task
+        thread = Thread(
+            target=run_task,
+            args=(
+                task["task_id"],
+                task["channel_url"],
+                task["channel_id"],
+                task["num_messages"],
+                task["anti_detect"]
+            )
         )
-        
-        # Wait between tasks if there are more
-        if idx < num_tasks:
-            print("Waiting 30 seconds before next task...\n")
-            sleep(30)
+        thread.start()
+        threads.append(thread)
+    
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
     
     print("\n" + "="*60)
     print("✓ All tasks complete!")
