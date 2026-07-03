@@ -170,7 +170,7 @@ def main():
     print("Discord Auto-Message Sender")
     print("="*60)
     
-    # Ask for number of tasks
+    # Ask for global settings first
     try:
         num_tasks = int(input("\nHow many tasks? "))
     except ValueError:
@@ -181,23 +181,23 @@ def main():
         print("Must have at least 1 task.")
         return
     
-    # Collect all task configurations
+    try:
+        num_messages = int(input("Number of messages per task: "))
+        if num_messages < 1:
+            print("Must send at least 1 message.")
+            return
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+        return
+    
+    anti_detect = input("Anti-detect mode? (y/n): ").lower() == "y"
+    
+    # Collect channel configurations only
     tasks = []
     for task_num in range(num_tasks):
-        print(f"\n--- Task {task_num + 1} Configuration ---")
+        print(f"\n--- Task {task_num + 1} Channel Configuration ---")
         channel_url = input("Discord channel URL: ").strip()
         channel_id = input("Discord channel ID: ").strip()
-        
-        try:
-            num_messages = int(input("Number of messages to send: "))
-            if num_messages < 1:
-                print("Must send at least 1 message.")
-                return
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-            return
-        
-        anti_detect = input("Anti-detect mode? (y/n): ").lower() == "y"
         
         tasks.append({
             "channel_url": channel_url,
